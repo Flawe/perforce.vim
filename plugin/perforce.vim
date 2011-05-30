@@ -1,6 +1,6 @@
-" Authors: Tom Slee (tslee@ianywhere.com); Suresh Srinivasan; Terrance Cohen
-" Last Modified: Mon May 28 2007
-" Version: 0.5
+" Authors: Tom Slee (tslee@ianywhere.com); Suresh Srinivasan; Terrance Cohen; Flavius Alecu
+" Last Modified: Mon May 30 2011
+" Version: 0.6
 "
 " ---------------------------------------------------------------------------
 " perforce.vim - An interface to the perforce command line.  This script 
@@ -92,6 +92,7 @@ function s:P4InitialBufferVariables()
     let b:otheropen=""
     let b:otheraction=""
     let b:changelist=""
+	let b:extraparams=""
 endfunction
 
 if !exists( "p4ruler" )
@@ -160,7 +161,7 @@ function s:P4RevertFile()
     let action=confirm("p4 Revert this file and lose any changes?" ,"&Yes\n&No", 2, "Question")
     if action == 1
 		 if s:P4Action() != ""
-            call s:P4ShellCommandCurrentBuffer( "revert" )
+            call s:P4ShellCommandCurrentBuffer( b:extraparams . "revert" )
 		     if v:errmsg != ""
 		         echoerr "Unable to revert file. " . v:errmsg
 		         return
@@ -179,7 +180,7 @@ endfunction
 " Diff a file, with more checking than just wrapping the command
 "----------------------------------------------------------------------------
 function s:P4DiffFile()
-    let diff = s:P4ShellCommandCurrentBuffer( "diff -db" )
+    let diff = s:P4ShellCommandCurrentBuffer( b:extraparams . "diff -db" )
     return diff
 endfunction
 
@@ -187,7 +188,7 @@ endfunction
 " Unified diff a file, with more checking than just wrapping the command
 "----------------------------------------------------------------------------
 function s:P4UDiffFile()
-    let diff = s:P4ShellCommandCurrentBuffer( "diff -du -db" )
+    let diff = s:P4ShellCommandCurrentBuffer( b:extraparams . "diff -du -db" )
     return diff
 endfunction
 
@@ -217,7 +218,7 @@ function s:P4VDiffFile()
         elseif i == 2
             let cmd = "diff2"
         endif
-        return s:P4ShellCommand(cmd . ' -db ' . files)
+        return s:P4ShellCommand(b:extraparams . cmd . ' -db ' . files)
     else
         return ""
     endif
@@ -227,7 +228,7 @@ endfunction
 " List version history of the file.
 "----------------------------------------------------------------------------
 function s:P4VersionsFile()
-    let verinfo = s:P4ShellCommandCurrentBuffer( "filelog -l" )
+    let verinfo = s:P4ShellCommandCurrentBuffer( b:extraparams . "filelog -l" )
     if v:errmsg != ""
         echoerr "Unable to get version info. " . v:errmsg
         return ""
@@ -274,8 +275,8 @@ function s:P4PrintFile()
         return ""
     endif
     let filename = expand( "%:p" ) . '#' . ver
-    return s:P4ShellCommand("print " . filename )
-    let p = s:P4ShellCommandCurrentBuffer( "print" )
+    return s:P4ShellCommand( b:extraparams . "print " . filename )
+    let p = s:P4ShellCommandCurrentBuffer( b:extraparams . "print" )
     return p
 endfunction
 
@@ -286,7 +287,7 @@ function s:P4SyncFile()
     let action=confirm("p4 sync this file and lose any changes?" ,"&Yes\n&No", 2, "Question")
     if action == 1
 		 if s:P4Action() == ""
-            call s:P4ShellCommandCurrentBuffer( "sync" )
+            call s:P4ShellCommandCurrentBuffer( b:extraparams . "sync" )
 		     if v:errmsg != ""
 		         echoerr "Unable to sync file. " . v:errmsg
 		         return
@@ -323,7 +324,7 @@ function s:P4OpenFileForEdit()
         if s:P4IsCurrent() != 0
             let sync = confirm("You do not have the head revision.  p4 sync the file before opening?", "&Yes\n&No", 1, "Question")
             if sync == 1
-                call s:P4ShellCommandCurrentBuffer( "sync" )
+                call s:P4ShellCommandCurrentBuffer( b:extraparams . "sync" )
             endif
         endif
     endif
@@ -335,10 +336,11 @@ function s:P4OpenFileForEdit()
     let listnum = ""
     let listnum = s:P4GetChangelist( "Current changelists:\n" . s:P4GetChangelists(0) . "\nEnter changelist number: ", b:changelist )
     if listnum == ""
-        echomsg "No changelist specified. Edit cancelled."
-        return
-    endif
-    call s:P4ShellCommandCurrentBuffer( action . " -c " . listnum )
+        call s:P4ShellCommandCurrentBuffer( b:extraparams . action )
+    else
+		call s:P4ShellCommandCurrentBuffer( b:extraparams . action . " -c " . listnum )
+	endif
+	
     if v:errmsg != ""
         echoerr "Unable to open file for " action . ". " . v:errmsg
         return
@@ -352,7 +354,7 @@ endfunction
 " Print annotated version of file
 "----------------------------------------------------------------------------
 function s:P4AnnotateFile()
-    let p = s:P4ShellCommandCurrentBuffer( "annotate -q -db")
+    let p = s:P4ShellCommandCurrentBuffer( b:extraparams . "annotate -q -db")
     return p
 endfunction
 
@@ -365,10 +367,10 @@ function s:P4OpenFileForDeletion()
         let listnum = ""
         let listnum = s:P4GetChangelist( "Current changelists:\n" . s:P4GetChangelists(0) . "\nEnter changelist number: ", "" )
         if listnum == ""
-            echomsg "No changelist specified. Delete cancelled."
-            return
-        endif
-        call s:P4ShellCommandCurrentBuffer( "delete -c " . listnum )
+            call s:P4ShellCommandCurrentBuffer( b:extraparams . "delete" )
+        else
+			call s:P4ShellCommandCurrentBuffer( b:extraparams . "delete -c " . listnum )
+		endif
         if v:errmsg != ""
             echoerr "Unable to mark file for deletion. " . v:errmsg
             return
@@ -410,6 +412,17 @@ function s:P4GetFileStatus()
     " \\C forces case-sensitive comparison
     let b:headrev = matchstr( filestatus, "headRev [0-9]*\\C" )
     let b:headrev = strpart( b:headrev, 8 )
+	let b:extraparams = ""
+	
+	if b:headrev == ""
+		let filestatus = s:P4ShellCommandCurrentBuffer( "-p " . g:P4SecondaryHost . " -c " . g:P4SecondaryClient . " fstat" )
+		let b:headrev = matchstr( filestatus, "headRev [0-9]*\\C" )
+		let b:headrev = strpart( b:headrev, 8 )
+		
+		if b:headrev != ""
+			let b:extraparams = "-p " . g:P4SecondaryHost . " -c " . g:P4SecondaryClient . " "
+		endif
+	endif
 
     let b:changelist = matchstr( filestatus, "change [0-9]*\\C" )
     let b:changelist = strpart( b:changelist, 6 )
@@ -540,7 +553,7 @@ function s:P4GetChangelistInfo()
         echomsg "No changelist specified. Cancelled."
         return
     endif
-    let l = s:P4ShellCommand("changelist -o " . listnum)
+    let l = s:P4ShellCommand(b:extraparams . "changelist -o " . listnum)
     return l
 endfunction
 
@@ -555,7 +568,7 @@ function s:P4GetChangelists(sAll)
         let opt = ' -c ' . $P4CLIENT
     endif
     let cmd = "changes -L -s pending -u " . $USER . opt
-    let filestatus = s:P4ShellCommand(cmd)
+    let filestatus = s:P4ShellCommand(b:extraparams . cmd)
     if v:errmsg != ""
         echoerr "Unable to get change lists. " . v:errmsg
         return ''
@@ -602,7 +615,7 @@ function s:P4CreateChangelist()
     let desc = inputdialog( "New changelist description: ")
     echo "\n"
     if desc != ""
-        let cmd = s:P4GetShellCommand( "change -i" )
+        let cmd = s:P4GetShellCommand( b:extraparams . "change -i" )
         let result = system ( cmd, "Description: " . desc . "\nChange: new")
         echo result
     endif
@@ -614,11 +627,12 @@ endfunction
 function s:P4GetFiles()
     let listnum = ""
     let listnum = s:P4GetChangelist( "Current changelists:\n" . s:P4GetChangelists(0) . "\nEnter changelist number: ", b:changelist )
+	let l = ""
     if listnum == ""
-        echomsg "No changelist specified. Cancelled."
-        return
-    endif
-    let l = s:P4ShellCommand("opened -c " . listnum)
+        let l = s:P4ShellCommand(b:extraparams . "opened")
+    else
+		let l = s:P4ShellCommand(b:extraparams . "opened -c " . listnum)
+	endif
     if v:errmsg != ""
         echoerr "Unable to get list of files for changelist " .  listnum . ". "  . v:errmsg
         return ""
@@ -640,7 +654,7 @@ function s:P4DiffFiles()
     let diffout = ""
     for item in cllist
         let f = substitute(item, " -.*", "", "")
-        let diffout = diffout . "\n" . s:P4ShellCommand("diff -db " . f)
+        let diffout = diffout . "\n" . s:P4ShellCommand(b:extraparams . "diff -db " . f)
     endfor
     return diffout
 endfunction
@@ -654,7 +668,7 @@ function s:P4UDiffFiles()
     let diffout = ""
     for item in cllist
         let f = substitute(item, " -.*", "", "")
-        let diffout = diffout . "\n" . s:P4ShellCommand("diff -du -db " . f)
+        let diffout = diffout . "\n" . s:P4ShellCommand(b:extraparams . "diff -du -db " . f)
     endfor
     return diffout
 endfunction
@@ -671,7 +685,7 @@ function s:P4DeleteChangelist()
     endif
     let action=confirm("Really p4 delete the changelist?" ,"&Yes\n&No", 1, "Question")
     if action == 1
-        let result = s:P4ShellCommand("change -d " . listnum)
+        let result = s:P4ShellCommand(b:extraparams . "change -d " . listnum)
         if v:errmsg != ""
             echoerr "Unable to delete changelist " . listnum . ". " . v:errmsg
             return
@@ -691,7 +705,7 @@ function s:P4SubmitChangelist()
     endif
     let action=confirm("Really checkin all the files?" ,"&Yes\n&No", 2, "Question")
     if action == 1
-        let result = s:P4ShellCommand("submit -c " . listnum)
+        let result = s:P4ShellCommand(b:extraparams . "submit -c " . listnum)
         if v:errmsg != ""
             echoerr "Unable to submit changelist " . listnum . ". " . v:errmsg
             return
@@ -706,7 +720,7 @@ endfunction
 " Get general perforce info
 "----------------------------------------------------------------------------
 function s:P4GetInfo()
-    let foo = s:P4ShellCommand("info")
+    let foo = s:P4ShellCommand(b:extraparams . "info")
     return foo
 endfunction
 
@@ -714,7 +728,7 @@ endfunction
 " Log in to perforce
 "----------------------------------------------------------------------------
 function s:P4Login()
-    " s:P4ShellCommand( "login" )
+    " s:P4ShellCommand( b:extraparams . "login" )
     let cmd = "!" . s:PerforceExecutable . " login"
     :exec cmd
 endfunction
