@@ -19,6 +19,14 @@ if exists("loaded_perforce")
 endif
 let loaded_perforce=1
 
+if !exists("g:P4SecondaryHost")
+	let g:P4SecondaryHost=''
+endif
+
+if !exists("g:P4SecondaryClient")
+	let g:P4SecondaryClient=''
+endif
+
 " define the mappings that provide the user interface to this plug-in
 augroup perforce
 
