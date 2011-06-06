@@ -47,13 +47,13 @@ augroup perforce
   map <silent> <Leader>u :echo <SID>P4UDiffFile()<CR>
   map <silent> <Leader>z :echo <SID>P4VDiffFile()<CR>
   map <silent> <Leader>v :echo <SID>P4VersionsFile()<CR>
-  map <silent> <Leader>p :echo <SID>P4PrintFile()<CR>
   map <silent> <Leader>h :echo <SID>P4Help()<CR>
   map <silent> <Leader>l :call <SID>P4Login()<CR>
   map <silent> <Leader>x :call <SID>P4OpenFileForDeletion()<CR>
   map <silent> <Leader>C :call <SID>P4CreateChangelist()<CR>
   map <silent> <Leader>D :echo <SID>P4DiffFiles()<CR>
   map <silent> <Leader>U :echo <SID>P4UDiffFiles()<CR>
+  map <silent> <Leader>P :echo <SID>P4PrintFile()<CR>
   map <silent> <Leader>L :echo <SID>P4GetChangelists(1)<CR>
   map <silent> <Leader>I :echo <SID>P4GetChangelistInfo()<CR>
   map <silent> <Leader>F :echo <SID>P4GetFiles()<CR>
@@ -262,7 +262,7 @@ function s:P4VersionsFile()
             let cl = cl . ' ' . strpart(item, 1)
         else
             let fields = split(item)
-            if fields[2] == 'change'
+            if len(fields) > 2 && fields[2] == 'change'
                 let user = split(fields[8], "@")[0]
                 let cl = printf("%4.4s %6d %s %-12s", fields[1], fields[3], fields[6], user)
                 let gotchange = 1
